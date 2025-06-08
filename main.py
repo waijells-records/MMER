@@ -1,3 +1,4 @@
+
 import asyncio
 import json
 import os
@@ -5,17 +6,17 @@ from datetime import datetime, timedelta
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, InputMediaVideo
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# Константы
-BOOKINGS_FILE = "bookings.json"
+# Путь к JSON-файлу с данными об услугах
 SERVICES_FILE = "services_full.json"
-BOT_TOKEN = "7943659464:AAF-M_FGdzG57jFQf8tnD2eAzozTPC0aT7Q"
+BOOKINGS_FILE = "bookings.json"
+
+# Токен бота
+BOT_TOKEN = os.getenv("BOT_TOKEN") or "7943659464:AAF-M_FGdzG57jFQf8tnD2eAzozTPC0aT7Q"
 VIDEO_PATH = "intro.mp4"
 
-# Контакты
 ADMIN_CHAT_ID = "@merecords29"
 NOTIFY_CHAT_ID = "@OLegKozhevin"
 
-# Загрузка услуг
 def load_services():
     with open(SERVICES_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -45,27 +46,39 @@ def generate_slots(date, is_stan_blizhe=False):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🎬 Стань Ближе: яркие эмоции, теплое общение и музыка, объединяющая сердца!\n\n"
-        "Мечтаете о крепкой связи со своим ребёнком, а он сидит в гаджетах? Хотите создать что-то особенное, что останется с вами на всю жизнь?\n\n"
-        "Представьте: вы и ваш ребёнок в профессиональной звукозаписывающей студии, вместе создаете песню и снимаете клип! Это не просто развлечение, это уникальный опыт, который укрепит вашу связь и подарит море позитивных эмоций."
+        "🎬 Стань Ближе: яркие эмоции, теплое общение и музыка, объединяющая сердца!
+
+"
+        "Мечтаете о крепкой связи со своим ребёнком, а он сидит в гаджетах? Хотите создать что-то особенное, что останется с вами на всю жизнь?
+
+"
+        "Представьте: вы и ваш ребёнок в профессиональной звукозаписывающей студии, вместе создаете песню и снимаете клип!"
     )
     if os.path.exists(VIDEO_PATH):
         await update.message.reply_video(video=open(VIDEO_PATH, 'rb'))
-
     await update.message.reply_text(
-        "Проект 'Стань Ближе' идеально подходит для:\n"
-        "• 👨‍👩‍👧 Родителей и детей-подростков\n"
-        "• 💑 Пар\n"
-        "• 👥 Коллективов\n\n"
-        "Наши преимущества:\n"
-        "• ❤️ Душевная атмосфера\n"
-        "• 🎧 Проф. оборудование\n"
-        "• 🎉 Удобное время\n"
-        "• 🎬 Клип в подарок"
+        "Проект 'Стань Ближе' идеально подходит для:
+"
+        "• 👨‍👩‍👧 Родителей и детей
+"
+        "• 💑 Пар
+"
+        "• 👥 Коллективов
+
+"
+        "Наши преимущества:
+"
+        "• ❤️ Эмоции
+"
+        "• 🎧 Проф. звук
+"
+        "• 🎉 Удобное время
+"
+        "• 🎬 Клип на память"
     )
     keyboard = [
         [InlineKeyboardButton("🕒 Забронировать время", callback_data="book")],
-        [InlineKeyboardButton("🛒 Купить", callback_data="buy")],
+        [InlineKeyboardButton("💳 Купить", callback_data="buy")],
         [InlineKeyboardButton("📞 Связаться", callback_data="contact")],
         [InlineKeyboardButton("📋 Услуги", callback_data="services")]
     ]
@@ -75,18 +88,23 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
-    services = load_services()
+    services_data = load_services()
 
     if data == "contact":
-        await query.edit_message_text("📞 Связаться со студией:\nТелефон: +7 (963) 200-45-36\nTelegram: @merecords29")
+        await query.edit_message_text("Связаться со студией:
+Телефон: +7 (963) 200-45-36
+Telegram: @merecords29")
 
     elif data == "buy":
-        await query.edit_message_text(
-            "💳 Способы оплаты (в разработке):\n\n"
-            "• QR-код счета ИП — *скоро появится*\n"
-            "• Счет ИП для перевода — *скоро появится*\n\n"
-            "Пока вы можете оплатить услугу, написав нам в Telegram: @merecords29"
-        )
+        await query.edit_message_text("💳 *Оплата услуг*:
+
+"
+                                      "🔹 QR-код счета ИП — *скоро появится*
+"
+                                      "🔹 Счёт на оплату от ИП — *скоро появится*
+
+"
+                                      "Для уточнения оплаты — @merecords29", parse_mode="Markdown")
 
     elif data == "book":
         today = datetime.now()
@@ -109,7 +127,6 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         today = datetime.now()
         next_saturday = today + timedelta((5 - today.weekday()) % 7)
         date_str = next_saturday.strftime("%Y-%m-%d")
-
         bookings = load_bookings()
         booked_slots = bookings.get(date_str, [])
         if slot in booked_slots:
@@ -118,25 +135,22 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         booked_slots.append(slot)
         bookings[date_str] = booked_slots
         save_bookings(bookings)
-
         await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=f"🔔 Новая бронь: {slot} в субботу")
         await context.bot.send_message(chat_id=NOTIFY_CHAT_ID, text=f"🔔 Новая бронь: {slot} в субботу")
-        await query.edit_message_text(f"✅ Вы забронировали {slot} на {next_saturday.strftime('%d.%m.%Y')}.")
+        await query.edit_message_text(f"✅ Вы забронировали {slot} на {next_saturday.strftime('%d.%m.%Y')}!")
 
     elif data == "services":
-        keyboard = [
-            [InlineKeyboardButton(service["name"], callback_data=f"srv_{i}")]
-            for i, service in enumerate(services)
-        ]
+        keyboard = [[InlineKeyboardButton(service["name"], callback_data=f"srv_{i}")]
+                    for i, service in enumerate(services_data)]
         await query.edit_message_text("Выберите услугу:", reply_markup=InlineKeyboardMarkup(keyboard))
 
     elif data.startswith("srv_"):
         index = int(data.split("_")[1])
-        if 0 <= index < len(services):
-            info = services[index]["description"]
-            await query.edit_message_text(info)
-        else:
-            await query.edit_message_text("Информация об услуге скоро будет добавлена.")
+        service = services_data[index]
+        await query.edit_message_text(f"*{service['name']}*
+
+{service['description']}",
+                                      parse_mode="Markdown")
 
     elif data == "none":
         await query.answer()
