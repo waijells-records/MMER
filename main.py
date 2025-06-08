@@ -1,4 +1,3 @@
-# Основной скелет Telegram-бота для студии "Стань Ближе"
 import asyncio
 import json
 import os
@@ -6,30 +5,30 @@ from datetime import datetime, timedelta
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, InputMediaVideo
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
+# Константы
 BOOKINGS_FILE = "bookings.json"
 SERVICES_FILE = "services_full.json"
-
-BOT_TOKEN = os.getenv("BOT_TOKEN") or "ТВОЙ_ТОКЕН_ЗДЕСЬ"
+BOT_TOKEN = "7943659464:AAF-M_FGdzG57jFQf8tnD2eAzozTPC0aT7Q"
 VIDEO_PATH = "intro.mp4"
 
+# Контакты
 ADMIN_CHAT_ID = "@merecords29"
 NOTIFY_CHAT_ID = "@OLegKozhevin"
 
+# Загрузка услуг
+def load_services():
+    with open(SERVICES_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
 def load_bookings():
     if os.path.exists(BOOKINGS_FILE):
-        with open(BOOKINGS_FILE, "r") as f:
+        with open(BOOKINGS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
 
 def save_bookings(data):
-    with open(BOOKINGS_FILE, "w") as f:
-        json.dump(data, f, indent=2)
-
-def load_services():
-    if os.path.exists(SERVICES_FILE):
-        with open(SERVICES_FILE, "r") as f:
-            return json.load(f)
-    return []
+    with open(BOOKINGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 def generate_slots(date, is_stan_blizhe=False):
     start = 10
@@ -39,7 +38,8 @@ def generate_slots(date, is_stan_blizhe=False):
     pause = timedelta(minutes=30 if is_stan_blizhe else 0)
     now = datetime.combine(date, datetime.min.time()).replace(hour=start)
     while now.hour < end:
-        slots.append(now.strftime("%H:%M"))
+        slot = now.strftime("%H:%M")
+        slots.append(slot)
         now += delta + pause
     return slots
 
@@ -51,6 +51,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     if os.path.exists(VIDEO_PATH):
         await update.message.reply_video(video=open(VIDEO_PATH, 'rb'))
+
     await update.message.reply_text(
         "Проект 'Стань Ближе' идеально подходит для:\n"
         "• 👨‍👩‍👧 Родителей и детей-подростков\n"
@@ -77,15 +78,14 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     services = load_services()
 
     if data == "contact":
-        await query.edit_message_text("📞 Связаться со студией:\n\nТелефон: +7 (963) 200-45-36\nTelegram: @merecords29")
+        await query.edit_message_text("📞 Связаться со студией:\nТелефон: +7 (963) 200-45-36\nTelegram: @merecords29")
 
     elif data == "buy":
         await query.edit_message_text(
-            "💳 *Как оплатить услугу:*\n\n"
-            "🔹 QR-код (скоро появится)\n"
-            "🔹 Счёт ИП (скоро появится)\n\n"
-            "❗ После выбора услуги напишите нам в Telegram: @merecords29",
-            parse_mode="Markdown"
+            "💳 Способы оплаты (в разработке):\n\n"
+            "• QR-код счета ИП — *скоро появится*\n"
+            "• Счет ИП для перевода — *скоро появится*\n\n"
+            "Пока вы можете оплатить услугу, написав нам в Telegram: @merecords29"
         )
 
     elif data == "book":
@@ -121,17 +121,20 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=f"🔔 Новая бронь: {slot} в субботу")
         await context.bot.send_message(chat_id=NOTIFY_CHAT_ID, text=f"🔔 Новая бронь: {slot} в субботу")
-
-        await query.edit_message_text(f"✅ Вы забронировали {slot} на {next_saturday.strftime('%d.%m.%Y')}. До встречи в студии!")
+        await query.edit_message_text(f"✅ Вы забронировали {slot} на {next_saturday.strftime('%d.%m.%Y')}.")
 
     elif data == "services":
-        keyboard = [[InlineKeyboardButton(s['name'], callback_data=f"srv_{i}")] for i, s in enumerate(services)]
-        await query.edit_message_text("📋 Выберите услугу:", reply_markup=InlineKeyboardMarkup(keyboard))
+        keyboard = [
+            [InlineKeyboardButton(service["name"], callback_data=f"srv_{i}")]
+            for i, service in enumerate(services)
+        ]
+        await query.edit_message_text("Выберите услугу:", reply_markup=InlineKeyboardMarkup(keyboard))
 
     elif data.startswith("srv_"):
         index = int(data.split("_")[1])
         if 0 <= index < len(services):
-            await query.edit_message_text(services[index]["description"])
+            info = services[index]["description"]
+            await query.edit_message_text(info)
         else:
             await query.edit_message_text("Информация об услуге скоро будет добавлена.")
 
