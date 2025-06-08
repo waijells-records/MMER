@@ -1,97 +1,146 @@
-from aiogram import Bot, Dispatcher, types, executor
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+# Основной скелет Telegram-бота для студии "Стань Ближе"
+import asyncio
 import json
-import logging
+import os
+from datetime import datetime, timedelta
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, InputMediaVideo
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-API_TOKEN = '7943659464:AAF-M_FGdzG57jFQf8tnD2eAzozTPC0aT7Q'
+BOOKINGS_FILE = "bookings.json"
+SERVICES_FILE = "services_full.json"
 
-logging.basicConfig(level=logging.INFO)
+BOT_TOKEN = os.getenv("BOT_TOKEN") or "ТВОЙ_ТОКЕН_ЗДЕСЬ"
+VIDEO_PATH = "intro.mp4"
 
-bot = Bot(token=API_TOKEN)
-dp = Dispatcher(bot)
+ADMIN_CHAT_ID = "@merecords29"
+NOTIFY_CHAT_ID = "@OLegKozhevin"
 
-with open("services_full.json", encoding='utf-8') as f:
-    SERVICES = json.load(f)
+def load_bookings():
+    if os.path.exists(BOOKINGS_FILE):
+        with open(BOOKINGS_FILE, "r") as f:
+            return json.load(f)
+    return {}
 
-main_kb = InlineKeyboardMarkup(row_width=2).add(
-    InlineKeyboardButton("🎬 Забронировать время", callback_data="book_time"),
-    InlineKeyboardButton("📞 Связь", callback_data="contact"),
-    InlineKeyboardButton("💳 Оплата", callback_data="payment"),
-    InlineKeyboardButton("🛠 Услуги", callback_data="services")
-)
+def save_bookings(data):
+    with open(BOOKINGS_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
-@dp.message_handler(commands=['start'])
-async def send_welcome(message: types.Message):
-    intro_text = (
-        "🎬Стань Ближе: яркие эмоции, теплое общение и музыка, объединяющая сердца!\n\n"
-        "Мечтаете о крепкой связи со своим ребенком, а он сидит в гаджетах? Хотите создать что-то особенное, что останется с вами на всю жизнь?\n\n"
-        "Представьте: вы и ваш ребенок в профессиональной звукозаписывающей студии, вместе создаете песню и снимаете клип! Это не просто развлечение, это уникальный опыт, который укрепит вашу связь и подарит море позитивных эмоций.\n\n"
-        "Проект \"Стань Ближе\" идеально подходит для:\n"
-        "• Родителей и детей-подростков: Запишите совместную песню и создайте уникальный семейный шедевр.\n"
-        "• Супружеских пар: Подарите песню, отражающую вашу любовь и историю.\n"
-        "• Корпоративных поздравлений: Песня от коллектива — яркий подарок для партнёров и клиентов.\n\n"
+def load_services():
+    if os.path.exists(SERVICES_FILE):
+        with open(SERVICES_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+def generate_slots(date, is_stan_blizhe=False):
+    start = 10
+    end = 22
+    slots = []
+    delta = timedelta(minutes=90 if is_stan_blizhe else 60)
+    pause = timedelta(minutes=30 if is_stan_blizhe else 0)
+    now = datetime.combine(date, datetime.min.time()).replace(hour=start)
+    while now.hour < end:
+        slots.append(now.strftime("%H:%M"))
+        now += delta + pause
+    return slots
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🎬 Стань Ближе: яркие эмоции, теплое общение и музыка, объединяющая сердца!\n\n"
+        "Мечтаете о крепкой связи со своим ребёнком, а он сидит в гаджетах? Хотите создать что-то особенное, что останется с вами на всю жизнь?\n\n"
+        "Представьте: вы и ваш ребёнок в профессиональной звукозаписывающей студии, вместе создаете песню и снимаете клип! Это не просто развлечение, это уникальный опыт, который укрепит вашу связь и подарит море позитивных эмоций."
+    )
+    if os.path.exists(VIDEO_PATH):
+        await update.message.reply_video(video=open(VIDEO_PATH, 'rb'))
+    await update.message.reply_text(
+        "Проект 'Стань Ближе' идеально подходит для:\n"
+        "• 👨‍👩‍👧 Родителей и детей-подростков\n"
+        "• 💑 Пар\n"
+        "• 👥 Коллективов\n\n"
         "Наши преимущества:\n"
-        "• ❤️ Тёплые эмоции в уютной атмосфере\n"
-        "• 🎧 Проф. оборудование и звук\n"
-        "• 🎉 Удобное время по выходным\n"
-        "• 🎬 Настоящий клип на память\n\n"
-        "Проект \"Стань Ближе\" предлагает:\n"
-        "• 1 час студии\n"
-        "• Запись песни\n"
-        "• Короткий клип\n\n"
-        "💰 Стоимость: 12 000 ₽\n\n"
-        "Готовы создать незабываемые воспоминания?\n\n"
-        "Нажмите кнопку ниже, чтобы начать:"
+        "• ❤️ Душевная атмосфера\n"
+        "• 🎧 Проф. оборудование\n"
+        "• 🎉 Удобное время\n"
+        "• 🎬 Клип в подарок"
     )
-    try:
-        with open("intro.mp4", "rb") as video:
-            await bot.send_video(message.chat.id, video, caption=intro_text, reply_markup=main_kb)
-    except FileNotFoundError:
-        await message.answer("⚠️ Видео intro.mp4 не найдено. Убедитесь, что файл находится рядом с main.py.", reply_markup=main_kb)
+    keyboard = [
+        [InlineKeyboardButton("🕒 Забронировать время", callback_data="book")],
+        [InlineKeyboardButton("🛒 Купить", callback_data="buy")],
+        [InlineKeyboardButton("📞 Связаться", callback_data="contact")],
+        [InlineKeyboardButton("📋 Услуги", callback_data="services")]
+    ]
+    await update.message.reply_text("Выберите действие:", reply_markup=InlineKeyboardMarkup(keyboard))
 
-@dp.callback_query_handler(lambda c: c.data == 'book_time')
-async def process_booking(callback_query: CallbackQuery):
-    await bot.answer_callback_query(callback_query.id)
-    await bot.send_message(callback_query.from_user.id, "Забронирование скоро будет доступно!")
+async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    services = load_services()
 
-@dp.callback_query_handler(lambda c: c.data == 'contact')
-async def process_contact(callback_query: CallbackQuery):
-    await bot.answer_callback_query(callback_query.id)
-    await bot.send_message(callback_query.from_user.id, "📞 Свяжитесь с нами:\n+7 (963) 200-45-36\nTelegram: @merecords29")
+    if data == "contact":
+        await query.edit_message_text("📞 Связаться со студией:\n\nТелефон: +7 (963) 200-45-36\nTelegram: @merecords29")
 
-@dp.callback_query_handler(lambda c: c.data == 'payment')
-async def process_payment(callback_query: CallbackQuery):
-    await bot.answer_callback_query(callback_query.id)
-    await bot.send_message(callback_query.from_user.id, "💳 Стоимость услуги: 12 000₽\n\n🔹 QR-код оплаты – скоро появится\n🔹 Счёт ИП – скоро появится")
+    elif data == "buy":
+        await query.edit_message_text(
+            "💳 *Как оплатить услугу:*\n\n"
+            "🔹 QR-код (скоро появится)\n"
+            "🔹 Счёт ИП (скоро появится)\n\n"
+            "❗ После выбора услуги напишите нам в Telegram: @merecords29",
+            parse_mode="Markdown"
+        )
 
-@dp.callback_query_handler(lambda c: c.data == 'services')
-async def process_services(callback_query: CallbackQuery):
-    await bot.answer_callback_query(callback_query.id)
-    kb = InlineKeyboardMarkup(row_width=1)
-    for key in SERVICES.keys():
-        kb.add(InlineKeyboardButton(key, callback_data=f'service_{key}'))
-    kb.add(InlineKeyboardButton("⬅️ Назад", callback_data="back_to_main"))
-    await bot.send_message(callback_query.from_user.id, "Выберите услугу:", reply_markup=kb)
+    elif data == "book":
+        today = datetime.now()
+        next_saturday = today + timedelta((5 - today.weekday()) % 7)
+        slots = generate_slots(next_saturday.date(), is_stan_blizhe=True)
+        bookings = load_bookings().get(next_saturday.strftime("%Y-%m-%d"), [])
+        keyboard = []
+        for slot in slots:
+            if slot in bookings:
+                keyboard.append([InlineKeyboardButton(f"❌ {slot} (занято)", callback_data="none")])
+            else:
+                keyboard.append([InlineKeyboardButton(f"🟢 {slot}", callback_data=f"book_{slot}")])
+        await query.edit_message_text(
+            f"Выберите время на {next_saturday.strftime('%d.%m.%Y')}",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
-@dp.callback_query_handler(lambda c: c.data.startswith('service_'))
-async def process_service_detail(callback_query: CallbackQuery):
-    await bot.answer_callback_query(callback_query.id)
-    key = callback_query.data[len('service_'):]
-    info = SERVICES.get(key, "Информация не найдена")
-    kb = InlineKeyboardMarkup(row_width=2)
-    if key in ["ЗАПИСЬ АУДИОСКАЗКИ", "ЗАПИСЬ ВОКАЛА", "ЗАПИСЬ ПОДКАСТА"]:
-        kb.add(InlineKeyboardButton("Забронировать время", callback_data="book_time"))
-    kb.add(
-        InlineKeyboardButton("Связь", callback_data="contact"),
-        InlineKeyboardButton("Оплата", callback_data="payment"),
-        InlineKeyboardButton("⬅️ Назад к услугам", callback_data="services")
-    )
-    await bot.send_message(callback_query.from_user.id, info, reply_markup=kb)
+    elif data.startswith("book_"):
+        slot = data.split("_")[1]
+        today = datetime.now()
+        next_saturday = today + timedelta((5 - today.weekday()) % 7)
+        date_str = next_saturday.strftime("%Y-%m-%d")
 
-@dp.callback_query_handler(lambda c: c.data == 'back_to_main')
-async def back_to_main(callback_query: CallbackQuery):
-    await bot.answer_callback_query(callback_query.id)
-    await bot.send_message(callback_query.from_user.id, "Вы вернулись в главное меню.", reply_markup=main_kb)
+        bookings = load_bookings()
+        booked_slots = bookings.get(date_str, [])
+        if slot in booked_slots:
+            await query.edit_message_text("Это время уже занято. Пожалуйста, выберите другое.")
+            return
+        booked_slots.append(slot)
+        bookings[date_str] = booked_slots
+        save_bookings(bookings)
 
-if __name__ == '__main__':
-    executor.start_polling(dp, skip_updates=True)
+        await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=f"🔔 Новая бронь: {slot} в субботу")
+        await context.bot.send_message(chat_id=NOTIFY_CHAT_ID, text=f"🔔 Новая бронь: {slot} в субботу")
+
+        await query.edit_message_text(f"✅ Вы забронировали {slot} на {next_saturday.strftime('%d.%m.%Y')}. До встречи в студии!")
+
+    elif data == "services":
+        keyboard = [[InlineKeyboardButton(s['name'], callback_data=f"srv_{i}")] for i, s in enumerate(services)]
+        await query.edit_message_text("📋 Выберите услугу:", reply_markup=InlineKeyboardMarkup(keyboard))
+
+    elif data.startswith("srv_"):
+        index = int(data.split("_")[1])
+        if 0 <= index < len(services):
+            await query.edit_message_text(services[index]["description"])
+        else:
+            await query.edit_message_text("Информация об услуге скоро будет добавлена.")
+
+    elif data == "none":
+        await query.answer()
+
+if __name__ == "__main__":
+    app = Application.builder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(handle_button))
+    print("Бот запущен...")
+    app.run_polling()
